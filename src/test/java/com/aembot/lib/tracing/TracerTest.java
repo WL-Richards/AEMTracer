@@ -25,8 +25,8 @@ class TracerTest {
   }
 
   @Test
-  void bufferSize_is500() {
-    assertEquals(500, Tracer.getBufferSize());
+  void bufferSize_is250() {
+    assertEquals(250, Tracer.getBufferSize());
   }
 
   @Test
