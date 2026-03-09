@@ -243,9 +243,9 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 
 ## Performance
 
-- **Span overhead**: ~100ns per traced method
-- **Memory**: ~50KB for default 500-loop buffer
-- **No allocations** during normal operation
+- **Span overhead**: ~150-250ns per traced method (after JIT warmup)
+- **Memory**: ~6MB for default 500-loop buffer (128K pre-allocated spans × 48 bytes/span)
+- **No allocations** during normal operation (all spans pre-allocated at startup)
 
 ## Requirements
 

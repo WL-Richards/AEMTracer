@@ -1,6 +1,10 @@
 package com.aembot.lib.tracing;
 
 import edu.wpi.first.wpilibj.Timer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lightweight tracing system for measuring function execution times. Uses a circular buffer of
@@ -43,15 +47,48 @@ public final class Tracer {
   /** Whether tracing is enabled */
   private static boolean enabled = true;
 
+  /** Default category used when none is specified */
+  public static final String DEFAULT_CATEGORY = "robot";
+
+  /** Category registry - maps category strings to indices */
+  private static final List<String> categories = new ArrayList<>();
+
+  /** Thread name cache - maps thread ID to name (populated on first encounter) */
+  private static final Map<Long, String> threadNames = new ConcurrentHashMap<>();
+
   /** Static initializer - pre-allocate all loops */
   static {
     for (int i = 0; i < BUFFER_SIZE; i++) {
       loops[i] = new TraceLoop();
     }
     currentLoop = loops[0];
+    // Register default category at index 0
+    categories.add(DEFAULT_CATEGORY);
   }
 
   private Tracer() {} // Static only
+
+  /**
+   * Get or register a category index. Returns existing index if category already registered.
+   *
+   * @param category The category name
+   * @return The byte index for this category
+   */
+  private static byte getCategoryIndex(String category) {
+    if (category == null || category.isEmpty()) {
+      return 0; // DEFAULT_CATEGORY
+    }
+    int idx = categories.indexOf(category);
+    if (idx >= 0) {
+      return (byte) idx;
+    }
+    // Register new category (capped at 127 to fit in signed byte)
+    if (categories.size() < 127) {
+      categories.add(category);
+      return (byte) (categories.size() - 1);
+    }
+    return 0; // Fall back to default if too many categories
+  }
 
   /**
    * Begin a new trace loop. Call this at the start of robotPeriodic().
@@ -92,9 +129,6 @@ public final class Tracer {
     if (!enabled) return;
     currentLoop.endTime = Timer.getFPGATimestamp();
   }
-
-  /** Default category used when none is specified */
-  public static final String DEFAULT_CATEGORY = "robot";
 
   /**
    * Create a trace scope for a function. Use with try-with-resources.
@@ -158,13 +192,14 @@ public final class Tracer {
     int idx = currentLoop.spanCount++;
     TraceSpan span = currentLoop.spans[idx];
     span.name = name;
-    span.category = (category == null || category.isEmpty()) ? DEFAULT_CATEGORY : category;
+    span.categoryIndex = getCategoryIndex(category);
     span.depth = currentDepth++;
     Thread currentThread = Thread.currentThread();
-    span.threadId = currentThread.getId();
-    span.threadName = currentThread.getName();
+    long tid = currentThread.getId();
+    span.threadId = tid;
+    // Cache thread name on first encounter (avoids storing per-span)
+    threadNames.computeIfAbsent(tid, k -> currentThread.getName());
     span.startNanos = System.nanoTime();
-    span.startFPGA = Timer.getFPGATimestamp();
     span.complete = false;
 
     return idx;
@@ -225,13 +260,23 @@ public final class Tracer {
     return totalLoopCount;
   }
 
+  /** Get the category list (for export) */
+  public static List<String> getCategories() {
+    return categories;
+  }
+
+  /** Get the thread name cache (for export) */
+  public static Map<Long, String> getThreadNames() {
+    return threadNames;
+  }
+
   /**
    * Export traces to Chrome Tracing JSON format.
    *
    * @param path The file path to write to
    */
   public static void exportToJson(String path) {
-    TraceExporter.exportToJson(loops, loopIndex, totalLoopCount, path);
+    TraceExporter.exportToJson(loops, loopIndex, totalLoopCount, categories, threadNames, path);
   }
 
   /**
@@ -241,6 +286,6 @@ public final class Tracer {
    * @param numLoops Number of recent loops to export
    */
   public static void exportRecentToJson(String path, int numLoops) {
-    TraceExporter.exportRecentToJson(loops, loopIndex, numLoops, path);
+    TraceExporter.exportRecentToJson(loops, loopIndex, numLoops, categories, threadNames, path);
   }
 }

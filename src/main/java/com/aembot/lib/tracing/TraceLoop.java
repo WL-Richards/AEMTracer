@@ -25,6 +25,9 @@ public final class TraceLoop {
   /** FPGA timestamp when this loop ended */
   public double endTime;
 
+  /** System.nanoTime() when this loop started (for computing span FPGA times) */
+  public long startNanos;
+
   /** Create a new loop with pre-allocated spans */
   public TraceLoop() {
     spans = new TraceSpan[MAX_SPANS];
@@ -35,6 +38,7 @@ public final class TraceLoop {
     loopNumber = 0;
     startTime = 0;
     endTime = 0;
+    startNanos = 0;
   }
 
   /** Reset this loop for reuse */
@@ -43,6 +47,8 @@ public final class TraceLoop {
       spans[i].reset();
     }
     spanCount = 0;
+    // Capture both timestamps as close together as possible for accurate correlation
+    startNanos = System.nanoTime();
     startTime = Timer.getFPGATimestamp();
     endTime = 0;
   }

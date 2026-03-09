@@ -4,6 +4,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,12 +26,19 @@ public final class TraceExporter {
    * @param loops The loop buffer
    * @param currentIndex Current write index in circular buffer
    * @param totalLoopCount Total loops recorded
+   * @param categories Category registry for index lookup
+   * @param threadNames Thread name cache for ID lookup
    * @param path Output file path
    */
   public static void exportToJson(
-      TraceLoop[] loops, int currentIndex, int totalLoopCount, String path) {
+      TraceLoop[] loops,
+      int currentIndex,
+      int totalLoopCount,
+      List<String> categories,
+      Map<Long, String> threadNames,
+      String path) {
     int numLoops = Math.min(totalLoopCount, loops.length);
-    exportRecentToJson(loops, currentIndex, numLoops, path);
+    exportRecentToJson(loops, currentIndex, numLoops, categories, threadNames, path);
   }
 
   /**
@@ -39,19 +47,25 @@ public final class TraceExporter {
    * @param loops The loop buffer
    * @param currentIndex Current write index in circular buffer
    * @param numLoops Number of loops to export
+   * @param categories Category registry for index lookup
+   * @param cachedThreadNames Thread name cache for ID lookup
    * @param path Output file path
    */
   public static void exportRecentToJson(
-      TraceLoop[] loops, int currentIndex, int numLoops, String path) {
+      TraceLoop[] loops,
+      int currentIndex,
+      int numLoops,
+      List<String> categories,
+      Map<Long, String> cachedThreadNames,
+      String path) {
     StringBuilder json = new StringBuilder(1024 * 1024); // 1MB initial capacity
     json.append("{\"traceEvents\":[\n");
 
     int bufferSize = loops.length;
     int startIndex = (currentIndex - numLoops + 1 + bufferSize) % bufferSize;
 
-    // First pass: discover all unique thread IDs and their names
+    // First pass: discover all unique thread IDs and assign export tids
     Map<Long, Integer> threadIdToTid = new HashMap<>();
-    Map<Long, String> threadIdToName = new HashMap<>();
     int nextTid = 10; // Start robot threads at tid=10
 
     for (int i = 0; i < numLoops; i++) {
@@ -66,9 +80,6 @@ public final class TraceExporter {
         long tid = span.threadId;
         if (!threadIdToTid.containsKey(tid)) {
           threadIdToTid.put(tid, nextTid++);
-          // Use actual thread name, or fall back to Thread-{id}
-          String name = span.threadName != null ? span.threadName : "Thread-" + tid;
-          threadIdToName.put(tid, name);
         }
       }
     }
@@ -83,7 +94,7 @@ public final class TraceExporter {
     for (Map.Entry<Long, Integer> entry : threadIdToTid.entrySet()) {
       long threadId = entry.getKey();
       int tid = entry.getValue();
-      String threadName = threadIdToName.getOrDefault(threadId, "Thread-" + threadId);
+      String threadName = cachedThreadNames.getOrDefault(threadId, "Thread-" + threadId);
       json.append("{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":");
       json.append(tid);
       json.append(",\"args\":{\"name\":\"");
@@ -159,12 +170,15 @@ public final class TraceExporter {
         TraceSpan span = loop.spans[s];
         if (!span.complete) continue;
 
-        double startUs = span.startFPGA * 1_000_000;
+        // Compute FPGA timestamp from nanos using loop's reference point
+        double spanFpgaSeconds = loop.startTime + (span.startNanos - loop.startNanos) / 1_000_000_000.0;
+        double startUs = spanFpgaSeconds * 1_000_000;
         double durUs = span.getDurationMicros();
         int tid = threadIdToTid.getOrDefault(span.threadId, 10);
 
-        String cat = (span.category != null && !span.category.isEmpty())
-            ? span.category : "robot";
+        // Look up category from index
+        int catIdx = span.categoryIndex & 0xFF; // unsigned byte
+        String cat = (catIdx < categories.size()) ? categories.get(catIdx) : "robot";
 
         json.append(",\n{\"name\":\"");
         escapeJsonString(json, span.name);

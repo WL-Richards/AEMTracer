@@ -37,8 +37,9 @@ TraceExporter                  <- Exports to Chrome Tracing JSON format
 ## Design Decisions
 
 - **Pre-allocated circular buffer**: 500 loops x 256 spans to avoid GC during robot loop
+- **Memory-optimized spans**: Thread names cached globally, categories stored as byte index, FPGA timestamps computed at export
 - **ByteBuddy over AspectJ**: AspectJ conflicts with GradleRIO; ByteBuddy self-attaches at runtime
-- **Thread detection**: Captures `Thread.currentThread().getId()` and `getName()` to separate Notifier threads
+- **Thread detection**: Captures `Thread.currentThread().getId()`, names cached in lookup table
 - **Chrome Tracing JSON**: Compatible with Perfetto UI and chrome://tracing
 - **Subsystem categories**: Spans can be categorized (Drivetrain, Vision, etc.) for Perfetto filtering
 - **Command integration**: Auto-traces WPILib Command lifecycle (initialize, execute, isFinished, end)
@@ -117,5 +118,17 @@ View traces at [Perfetto UI](https://ui.perfetto.dev)
 ## Performance Targets
 
 - Span overhead: ~100ns per traced method
-- Memory: ~100KB for 500-loop buffer
+- Memory: ~5-6MB for 500-loop buffer (128K spans × ~40-48 bytes/span)
 - Zero allocations during normal operation
+
+## Memory Optimization
+
+TraceSpan is optimized for minimal memory footprint:
+- Thread names: cached in `Tracer.getThreadNames()` map, not stored per-span
+- Categories: stored as byte index into `Tracer.getCategories()` list
+- FPGA timestamps: computed at export time from nanos using TraceLoop's reference point
+
+Per-span fields (~40-48 bytes with object header and alignment):
+- `long startNanos, endNanos, threadId` (24 bytes)
+- `String name` reference (4 bytes compressed oops)
+- `byte depth, categoryIndex` + `boolean complete` (3 bytes + padding)

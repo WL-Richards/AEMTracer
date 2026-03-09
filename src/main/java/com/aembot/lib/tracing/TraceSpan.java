@@ -3,6 +3,9 @@ package com.aembot.lib.tracing;
 /**
  * Represents a single traced span (function call) with timing information. Pre-allocated to avoid
  * GC during robot loop.
+ *
+ * <p>Memory-optimized: threadName and category are stored externally in lookup tables.
+ * FPGA timestamps are computed at export time from nanos using TraceLoop's reference point.
  */
 public final class TraceSpan {
   /** Start time in nanoseconds (System.nanoTime) for high precision duration */
@@ -10,9 +13,6 @@ public final class TraceSpan {
 
   /** End time in nanoseconds */
   public long endNanos;
-
-  /** Start time as FPGA timestamp for correlation with other logs */
-  public double startFPGA;
 
   /** Name of the traced function (ClassName.methodName or custom) */
   public String name;
@@ -23,11 +23,8 @@ public final class TraceSpan {
   /** Thread ID that this span ran on */
   public long threadId;
 
-  /** Thread name that this span ran on */
-  public String threadName;
-
-  /** Category/subsystem for grouping (e.g., "Drivetrain", "Vision") */
-  public String category;
+  /** Category index into Tracer.getCategories() */
+  public byte categoryIndex;
 
   /** Whether this span has completed (endSpan was called) */
   public boolean complete;
@@ -36,12 +33,10 @@ public final class TraceSpan {
   public void reset() {
     startNanos = 0;
     endNanos = 0;
-    startFPGA = 0;
     name = null;
-    category = null;
     depth = 0;
     threadId = 0;
-    threadName = null;
+    categoryIndex = 0;
     complete = false;
   }
 

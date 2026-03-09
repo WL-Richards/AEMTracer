@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -19,6 +23,8 @@ class TraceExporterTest {
   @TempDir Path tempDir;
 
   private TraceLoop[] frames;
+  private List<String> categories;
+  private Map<Long, String> threadNames;
 
   @BeforeEach
   void setUp() {
@@ -27,6 +33,11 @@ class TraceExporterTest {
     for (int i = 0; i < frames.length; i++) {
       frames[i] = new TraceLoop();
     }
+    // Set up default category registry
+    categories = new ArrayList<>();
+    categories.add("robot"); // index 0
+    // Set up thread name cache
+    threadNames = new HashMap<>();
   }
 
   /**
@@ -36,30 +47,32 @@ class TraceExporterTest {
     frame.loopNumber = loopNumber;
     frame.startTime = startTime;
     frame.endTime = endTime;
+    frame.startNanos = (long) (startTime * 1_000_000_000); // Simulated nanos reference
     frame.spanCount = 0;
   }
 
   /**
    * Adds a completed span to a frame.
    */
-  private void addSpan(TraceLoop frame, String name, long threadId, String threadName) {
+  private void addSpan(TraceLoop frame, String name, long threadId, String threadNameStr) {
     int idx = frame.spanCount++;
     TraceSpan span = frame.spans[idx];
     span.name = name;
-    span.startNanos = 1_000_000;
-    span.endNanos = 2_000_000;
-    span.startFPGA = frame.startTime;
+    span.startNanos = frame.startNanos + 1_000_000; // 1ms after frame start
+    span.endNanos = frame.startNanos + 2_000_000;   // 2ms after frame start
     span.depth = 0;
     span.threadId = threadId;
-    span.threadName = threadName;
+    span.categoryIndex = 0; // default "robot" category
     span.complete = true;
+    // Cache thread name
+    threadNames.put(threadId, threadNameStr);
   }
 
   @Test
   void exportToJson_createsFile() throws IOException {
     Path outputPath = tempDir.resolve("trace.json");
 
-    TraceExporter.exportToJson(frames, 0, 0, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 0, categories, threadNames, outputPath.toString());
 
     assertTrue(Files.exists(outputPath));
   }
@@ -68,7 +81,7 @@ class TraceExporterTest {
   void exportToJson_createsValidJson() throws IOException {
     Path outputPath = tempDir.resolve("trace.json");
 
-    TraceExporter.exportToJson(frames, 0, 0, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 0, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.startsWith("{\"traceEvents\":["));
@@ -79,7 +92,7 @@ class TraceExporterTest {
   void exportToJson_includesProcessMetadata() throws IOException {
     Path outputPath = tempDir.resolve("trace.json");
 
-    TraceExporter.exportToJson(frames, 0, 0, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 0, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"process_name\""));
@@ -90,7 +103,7 @@ class TraceExporterTest {
   void exportToJson_includesSpecialTracks() throws IOException {
     Path outputPath = tempDir.resolve("trace.json");
 
-    TraceExporter.exportToJson(frames, 0, 0, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 0, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"LoopOverruns\""));
@@ -103,7 +116,7 @@ class TraceExporterTest {
     addSpan(frames[0], "TestMethod", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"TestMethod\""));
@@ -117,7 +130,7 @@ class TraceExporterTest {
     addSpan(frames[0], "Test", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"Loop Duration (ms)\""));
@@ -130,7 +143,7 @@ class TraceExporterTest {
     addSpan(frames[0], "SlowMethod", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"LOOP OVERRUN\""));
@@ -143,7 +156,7 @@ class TraceExporterTest {
     addSpan(frames[0], "FastMethod", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertFalse(content.contains("LOOP OVERRUN"));
@@ -159,13 +172,13 @@ class TraceExporterTest {
     span.name = "Test\"Method\\With\nSpecial\tChars";
     span.complete = true;
     span.threadId = 1;
-    span.threadName = "main";
-    span.startNanos = 1_000_000;
-    span.endNanos = 2_000_000;
-    span.startFPGA = 1.0;
+    span.startNanos = frames[0].startNanos + 1_000_000;
+    span.endNanos = frames[0].startNanos + 2_000_000;
+    span.categoryIndex = 0;
+    threadNames.put(1L, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     // Escaped characters should be present
@@ -188,10 +201,9 @@ class TraceExporterTest {
     incompleteSpan.name = "IncompleteSpan";
     incompleteSpan.complete = false;
     incompleteSpan.threadId = 1;
-    incompleteSpan.threadName = "main";
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("CompleteSpan"));
@@ -208,7 +220,7 @@ class TraceExporterTest {
     addSpan(frames[1], "OnlySpan", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportRecentToJson(frames, 1, 2, outputPath.toString());
+    TraceExporter.exportRecentToJson(frames, 1, 2, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("OnlySpan"));
@@ -223,7 +235,7 @@ class TraceExporterTest {
     }
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportRecentToJson(frames, 4, 2, outputPath.toString());
+    TraceExporter.exportRecentToJson(frames, 4, 2, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     // Should have frames 3 and 4 (most recent 2)
@@ -241,7 +253,7 @@ class TraceExporterTest {
     addSpan(frames[0], "WorkerThreadSpan", 2, "Worker-1");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"main\""));
@@ -254,7 +266,7 @@ class TraceExporterTest {
     addSpan(frames[0], "Test", 1, "main");
 
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
+    TraceExporter.exportToJson(frames, 0, 1, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"20ms Budget\""));
@@ -273,7 +285,7 @@ class TraceExporterTest {
     // Buffer size is 10, current index is 2, we want 5 frames
     // This means frames 8, 9, 0, 1, 2
     Path outputPath = tempDir.resolve("trace.json");
-    TraceExporter.exportRecentToJson(frames, 2, 5, outputPath.toString());
+    TraceExporter.exportRecentToJson(frames, 2, 5, categories, threadNames, outputPath.toString());
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("Span8"));
