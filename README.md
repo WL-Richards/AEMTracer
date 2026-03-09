@@ -284,4 +284,5 @@ Contributions welcome! Please open an issue or PR on GitHub.
 ---
 
 Made with :heart: by AEMBOT
+<br>
 ROBOTS. DONT. QUIT.
