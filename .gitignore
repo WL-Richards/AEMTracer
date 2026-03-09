@@ -18,6 +18,7 @@ Thumbs.db
 # Java
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 hs_err_pid*
 
