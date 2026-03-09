@@ -20,47 +20,47 @@ public final class TraceExporter {
   private TraceExporter() {} // Static only
 
   /**
-   * Export all frames in the buffer to Chrome Tracing JSON format.
+   * Export all loops in the buffer to Chrome Tracing JSON format.
    *
-   * @param frames The frame buffer
+   * @param loops The loop buffer
    * @param currentIndex Current write index in circular buffer
-   * @param totalFrameCount Total frames recorded
+   * @param totalLoopCount Total loops recorded
    * @param path Output file path
    */
   public static void exportToJson(
-      TraceFrame[] frames, int currentIndex, int totalFrameCount, String path) {
-    int numFrames = Math.min(totalFrameCount, frames.length);
-    exportRecentToJson(frames, currentIndex, numFrames, path);
+      TraceLoop[] loops, int currentIndex, int totalLoopCount, String path) {
+    int numLoops = Math.min(totalLoopCount, loops.length);
+    exportRecentToJson(loops, currentIndex, numLoops, path);
   }
 
   /**
-   * Export the most recent N frames to Chrome Tracing JSON format.
+   * Export the most recent N loops to Chrome Tracing JSON format.
    *
-   * @param frames The frame buffer
+   * @param loops The loop buffer
    * @param currentIndex Current write index in circular buffer
-   * @param numFrames Number of frames to export
+   * @param numLoops Number of loops to export
    * @param path Output file path
    */
   public static void exportRecentToJson(
-      TraceFrame[] frames, int currentIndex, int numFrames, String path) {
+      TraceLoop[] loops, int currentIndex, int numLoops, String path) {
     StringBuilder json = new StringBuilder(1024 * 1024); // 1MB initial capacity
     json.append("{\"traceEvents\":[\n");
 
-    int bufferSize = frames.length;
-    int startIndex = (currentIndex - numFrames + 1 + bufferSize) % bufferSize;
+    int bufferSize = loops.length;
+    int startIndex = (currentIndex - numLoops + 1 + bufferSize) % bufferSize;
 
     // First pass: discover all unique thread IDs and their names
     Map<Long, Integer> threadIdToTid = new HashMap<>();
     Map<Long, String> threadIdToName = new HashMap<>();
     int nextTid = 10; // Start robot threads at tid=10
 
-    for (int i = 0; i < numFrames; i++) {
-      int frameIdx = (startIndex + i) % bufferSize;
-      TraceFrame frame = frames[frameIdx];
-      if (frame.spanCount == 0) continue;
+    for (int i = 0; i < numLoops; i++) {
+      int loopIdx = (startIndex + i) % bufferSize;
+      TraceLoop loop = loops[loopIdx];
+      if (loop.spanCount == 0) continue;
 
-      for (int s = 0; s < frame.spanCount; s++) {
-        TraceSpan span = frame.spans[s];
+      for (int s = 0; s < loop.spanCount; s++) {
+        TraceSpan span = loop.spans[s];
         if (!span.complete) continue;
 
         long tid = span.threadId;
@@ -77,7 +77,7 @@ public final class TraceExporter {
     json.append(
         "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":2,\"args\":{\"name\":\"LoopOverruns\"}},\n");
     json.append(
-        "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":3,\"args\":{\"name\":\"FrameMarkers\"}},\n");
+        "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":3,\"args\":{\"name\":\"LoopMarkers\"}},\n");
 
     // Add thread name metadata for discovered threads
     for (Map.Entry<Long, Integer> entry : threadIdToTid.entrySet()) {
@@ -99,64 +99,64 @@ public final class TraceExporter {
     // Loop timing constant
     final double LOOP_PERIOD_MS = 20.0;
 
-    for (int i = 0; i < numFrames; i++) {
-      int frameIdx = (startIndex + i) % bufferSize;
-      TraceFrame frame = frames[frameIdx];
+    for (int i = 0; i < numLoops; i++) {
+      int loopIdx = (startIndex + i) % bufferSize;
+      TraceLoop loop = loops[loopIdx];
 
-      // Skip empty frames
-      if (frame.spanCount == 0) continue;
+      // Skip empty loops
+      if (loop.spanCount == 0) continue;
 
-      double frameDurationMs = frame.getDurationMillis();
-      double frameStartUs = frame.startTime * 1_000_000;
-      double frameEndUs = frame.endTime * 1_000_000;
-      boolean isOverrun = frameDurationMs > LOOP_PERIOD_MS;
+      double loopDurationMs = loop.getDurationMillis();
+      double loopStartUs = loop.startTime * 1_000_000;
+      double loopEndUs = loop.endTime * 1_000_000;
+      boolean isOverrun = loopDurationMs > LOOP_PERIOD_MS;
 
-      // Add frame duration counter (shows as a graph in Perfetto)
+      // Add loop duration counter (shows as a graph in Perfetto)
       if (!firstEvent) {
         json.append(",\n");
       }
       firstEvent = false;
-      json.append("{\"name\":\"Frame Duration (ms)\",\"cat\":\"timing\",\"ph\":\"C\",\"ts\":");
-      json.append(String.format("%.3f", frameStartUs));
+      json.append("{\"name\":\"Loop Duration (ms)\",\"cat\":\"timing\",\"ph\":\"C\",\"ts\":");
+      json.append(String.format("%.3f", loopStartUs));
       json.append(",\"pid\":1,\"tid\":0,\"args\":{\"duration\":");
-      json.append(String.format("%.3f", frameDurationMs));
+      json.append(String.format("%.3f", loopDurationMs));
       json.append("}}");
 
-      // Add 20ms budget line marker at frame start
+      // Add 20ms budget line marker at loop start
       json.append(",\n{\"name\":\"20ms Budget\",\"cat\":\"timing\",\"ph\":\"C\",\"ts\":");
-      json.append(String.format("%.3f", frameStartUs));
+      json.append(String.format("%.3f", loopStartUs));
       json.append(",\"pid\":1,\"tid\":0,\"args\":{\"budget\":20.0}}");
 
-      // Add LOOP OVERRUN marker if frame exceeded 20ms
+      // Add LOOP OVERRUN marker if loop exceeded 20ms
       if (isOverrun) {
         json.append(",\n{\"name\":\"LOOP OVERRUN\",\"cat\":\"error\",\"ph\":\"X\",\"ts\":");
-        json.append(String.format("%.3f", frameStartUs));
+        json.append(String.format("%.3f", loopStartUs));
         json.append(",\"dur\":");
-        json.append(String.format("%.3f", frameEndUs - frameStartUs));
-        json.append(",\"pid\":1,\"tid\":2,\"args\":{\"frame\":");
-        json.append(frame.frameNumber);
+        json.append(String.format("%.3f", loopEndUs - loopStartUs));
+        json.append(",\"pid\":1,\"tid\":2,\"args\":{\"loop\":");
+        json.append(loop.loopNumber);
         json.append(",\"duration_ms\":");
-        json.append(String.format("%.3f", frameDurationMs));
+        json.append(String.format("%.3f", loopDurationMs));
         json.append(",\"overrun_ms\":");
-        json.append(String.format("%.3f", frameDurationMs - LOOP_PERIOD_MS));
+        json.append(String.format("%.3f", loopDurationMs - LOOP_PERIOD_MS));
         json.append("}}");
       }
 
-      // Add frame boundary instant event on FrameMarkers track
-      json.append(",\n{\"name\":\"Frame ");
-      json.append(frame.frameNumber);
+      // Add loop boundary instant event on LoopMarkers track
+      json.append(",\n{\"name\":\"Loop ");
+      json.append(loop.loopNumber);
       if (isOverrun) {
         json.append(" [OVERRUN]");
       }
-      json.append("\",\"cat\":\"frame\",\"ph\":\"i\",\"ts\":");
-      json.append(String.format("%.3f", frameStartUs));
+      json.append("\",\"cat\":\"loop\",\"ph\":\"i\",\"ts\":");
+      json.append(String.format("%.3f", loopStartUs));
       json.append(",\"pid\":1,\"tid\":3,\"s\":\"t\",\"args\":{\"duration_ms\":");
-      json.append(String.format("%.3f", frameDurationMs));
+      json.append(String.format("%.3f", loopDurationMs));
       json.append("}}");
 
       // Output spans as Complete Duration events ("X")
-      for (int s = 0; s < frame.spanCount; s++) {
-        TraceSpan span = frame.spans[s];
+      for (int s = 0; s < loop.spanCount; s++) {
+        TraceSpan span = loop.spans[s];
         if (!span.complete) continue;
 
         double startUs = span.startFPGA * 1_000_000;
@@ -176,8 +176,8 @@ public final class TraceExporter {
         json.append(String.format("%.3f", durUs));
         json.append(",\"pid\":1,\"tid\":");
         json.append(tid);
-        json.append(",\"args\":{\"frame\":");
-        json.append(frame.frameNumber);
+        json.append(",\"args\":{\"loop\":");
+        json.append(loop.loopNumber);
         json.append(",\"thread\":");
         json.append(span.threadId);
         json.append(",\"category\":\"");
@@ -191,7 +191,7 @@ public final class TraceExporter {
     // Write to file
     try (PrintWriter writer = new PrintWriter(new FileWriter(path))) {
       writer.print(json.toString());
-      System.out.println("[Tracer] Exported " + numFrames + " frames to " + path);
+      System.out.println("[Tracer] Exported " + numLoops + " loops to " + path);
     } catch (IOException e) {
       System.err.println("[Tracer] Failed to export traces: " + e.getMessage());
     }

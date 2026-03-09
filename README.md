@@ -11,65 +11,68 @@ View your traces in [Perfetto UI](https://ui.perfetto.dev)
 - **Command framework integration** - Auto-trace WPILib Command lifecycle methods
 - **Zero-allocation design** - Pre-allocated circular buffer avoids GC pauses
 - **Multi-thread support** - Automatically detects and separates Notifier threads
-- **Loop overrun detection** - Highlights frames exceeding the 20ms budget
+- **Loop overrun detection** - Highlights loops exceeding the 20ms budget
 - **Perfetto-compatible output** - View traces in [Perfetto UI](https://ui.perfetto.dev) or Chrome's tracing viewer
 - **Minimal overhead** - Designed for real-time robot control loops
 
 ## Concepts
 
-### Frames
+### Loops
 
-A **frame** represents one iteration of your robot's main loop (`robotPeriodic()`). FRC robots typically run at 50Hz, so each frame is ~20ms. The tracer uses a circular buffer of 500 frames (~10 seconds of history).
+A **loop** represents one iteration of your robot's periodic function (`robotPeriodic()`). FRC robots typically run at 50Hz, so each loop is ~20ms. The tracer uses a circular buffer of 500 loops (~10 seconds of history).
 
-You mark frame boundaries explicitly:
+You mark loop boundaries explicitly:
 
 ```java
 public void robotPeriodic() {
-    Tracer.beginFrame();   // Start of this loop iteration
+    Tracer.beginLoop();   // Start of this loop iteration
     // ... robot code ...
-    Tracer.endFrame();     // End of this loop iteration
+    Tracer.endLoop();     // End of this loop iteration
 }
 ```
 
 ### Spans
 
-A **span** is a timed section of code within a frame. Each span captures:
+A **span** is a timed section of code within a loop. Each span captures:
 - Start and end timestamps
 - Method/section name
 - Thread ID (to separate main thread from Notifier threads)
 - Optional category (e.g., "Drivetrain", "Vision")
 
-Multiple spans nest within each frame, creating a timeline of what executed during that loop iteration.
+Multiple spans nest within each loop, creating a timeline of what executed during that iteration. Each loop supports up to **256 spans** with a maximum nesting depth of **32**.
 
 ```
-Frame 0 ─┬─ DriveSubsystem.periodic()  [0.2ms]
-         ├─ ShooterSubsystem.periodic() [0.5ms]
-         │   └─ calculateTrajectory()   [0.3ms]
-         └─ VisionSubsystem.periodic()  [1.1ms]
+Loop 0 ─┬─ DriveSubsystem.periodic()  [0.2ms]
+        ├─ ShooterSubsystem.periodic() [0.5ms]
+        │   └─ calculateTrajectory()   [0.3ms]
+        └─ VisionSubsystem.periodic()  [1.1ms]
 
-Frame 1 ─┬─ DriveSubsystem.periodic()  [0.2ms]
-         └─ ...
+Loop 1 ─┬─ DriveSubsystem.periodic()  [0.2ms]
+        └─ ...
 ```
 
 ## Installation
 
 ### Using JitPack (Recommended)
 
-Add the JitPack repository to your `build.gradle`:
+Add JitPack to your `build.gradle` repositories block (alongside existing repositories):
 
 ```gradle
 repositories {
+    mavenCentral()  // Required for ByteBuddy dependency
     maven { url 'https://jitpack.io' }
 }
 ```
 
-Add the dependency:
+Then add the dependency:
 
 ```gradle
 dependencies {
     implementation 'com.github.aembot:AEMTracer:1.0.0'
 }
 ```
+
+> **Note for FRC projects**: Your `build.gradle` already has a `repositories` block with WPILib maven repos. Just add the two lines above to that existing block.
 
 ### Local Installation
 
@@ -107,18 +110,18 @@ public final class Main {
 }
 ```
 
-### 2. Add frame boundaries in `Robot.java`
+### 2. Add loop boundaries in `Robot.java`
 
 ```java
 import com.aembot.lib.tracing.Tracer;
 
 @Override
 public void robotPeriodic() {
-    Tracer.beginFrame();
+    Tracer.beginLoop();
 
     // Your robot code here...
 
-    Tracer.endFrame();
+    Tracer.endLoop();
 }
 ```
 
@@ -211,7 +214,7 @@ if (DriverStation.isFMSAttached()) {
 
 ### Buffer Size
 
-The default buffer holds 500 frames (~10 seconds at 50Hz). This is configured in `Tracer.java`.
+The default buffer holds 500 loops (~10 seconds at 50Hz) with up to 256 spans per loop. These values are configured in `Tracer.java` and `TraceLoop.java`.
 
 ## Output Format
 
@@ -225,9 +228,9 @@ Traces are exported in [Chrome Tracing JSON format](https://docs.google.com/docu
 
 | Track | Description |
 |-------|-------------|
-| `Frame Duration (ms)` | Counter showing frame timing |
-| `LoopOverruns` | Markers for frames exceeding 20ms |
-| `FrameMarkers` | Frame boundary indicators |
+| `Loop Duration (ms)` | Counter showing loop timing |
+| `LoopOverruns` | Markers for loops exceeding 20ms |
+| `LoopMarkers` | Loop boundary indicators |
 | `robot main` | Main robot thread spans |
 | `Notifier-*` | Notifier thread spans |
 
@@ -241,7 +244,7 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 ## Performance
 
 - **Span overhead**: ~100ns per traced method
-- **Memory**: ~50KB for default 500-frame buffer
+- **Memory**: ~50KB for default 500-loop buffer
 - **No allocations** during normal operation
 
 ## Requirements

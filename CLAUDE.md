@@ -14,7 +14,7 @@ ByteBuddy Agent                <- Instruments @Traced methods at class load time
 TracingInterceptor             <- Wraps method calls with Tracer.beginSpan/endSpan
         │
         ▼
-Tracer                         <- Manages circular buffer of TraceFrames
+Tracer                         <- Manages circular buffer of TraceLoops
         │
         ▼
 TraceExporter                  <- Exports to Chrome Tracing JSON format
@@ -25,8 +25,8 @@ TraceExporter                  <- Exports to Chrome Tracing JSON format
 | File | Purpose |
 |------|---------|
 | `Traced.java` | `@Traced` annotation for methods (supports `category` attribute) |
-| `Tracer.java` | Core API: `beginFrame()`, `endFrame()`, `beginSpan()`, `endSpan()` |
-| `TraceFrame.java` | Container for one robot loop iteration (holds TraceSpans) |
+| `Tracer.java` | Core API: `beginLoop()`, `endLoop()`, `beginSpan()`, `endSpan()` |
+| `TraceLoop.java` | Container for one robot loop iteration (holds TraceSpans) |
 | `TraceSpan.java` | Single traced method call with timing, thread, and category info |
 | `TraceScope.java` | AutoCloseable for try-with-resources manual tracing |
 | `TraceExporter.java` | Exports buffer to Chrome Tracing JSON |
@@ -36,7 +36,7 @@ TraceExporter                  <- Exports to Chrome Tracing JSON format
 
 ## Design Decisions
 
-- **Pre-allocated circular buffer**: 500 frames x 256 spans to avoid GC during robot loop
+- **Pre-allocated circular buffer**: 500 loops x 256 spans to avoid GC during robot loop
 - **ByteBuddy over AspectJ**: AspectJ conflicts with GradleRIO; ByteBuddy self-attaches at runtime
 - **Thread detection**: Captures `Thread.currentThread().getId()` and `getName()` to separate Notifier threads
 - **Chrome Tracing JSON**: Compatible with Perfetto UI and chrome://tracing
@@ -75,11 +75,11 @@ public static void main(String... args) {
     RobotBase.startRobot(Robot::new);
 }
 
-// Robot.java - frame boundaries
+// Robot.java - loop boundaries
 public void robotPeriodic() {
-    Tracer.beginFrame();
+    Tracer.beginLoop();
     // robot code...
-    Tracer.endFrame();
+    Tracer.endLoop();
 }
 
 // Any method - add annotation
@@ -106,9 +106,9 @@ Tracer.exportToJson("trace_" + System.currentTimeMillis() + ".json");
 ## Output Format
 
 Exports to Chrome Tracing JSON with:
-- **Frame Duration counter**: Shows ms per frame
-- **LoopOverruns track**: Markers for frames > 20ms
-- **FrameMarkers track**: Frame boundary indicators
+- **Loop Duration counter**: Shows ms per loop
+- **LoopOverruns track**: Markers for loops > 20ms
+- **LoopMarkers track**: Loop boundary indicators
 - **Per-thread tracks**: Main thread and Notifier threads separated
 - **Category filtering**: Filter by subsystem (Drivetrain, Vision, Command, etc.) in Perfetto
 
@@ -117,5 +117,5 @@ View traces at [Perfetto UI](https://ui.perfetto.dev)
 ## Performance Targets
 
 - Span overhead: ~100ns per traced method
-- Memory: ~100KB for 500-frame buffer
+- Memory: ~100KB for 500-loop buffer
 - Zero allocations during normal operation

@@ -4,38 +4,38 @@ import edu.wpi.first.wpilibj.Timer;
 
 /**
  * Lightweight tracing system for measuring function execution times. Uses a circular buffer of
- * pre-allocated frames to avoid GC during robot loop.
+ * pre-allocated loops to avoid GC during robot loop.
  *
  * <p>Usage:
  *
  * <pre>{@code
  * // In robotPeriodic():
- * Tracer.beginFrame();
+ * Tracer.beginLoop();
  * // ... robot code (traced via @Traced annotations)
- * Tracer.endFrame();
+ * Tracer.endLoop();
  *
  * // Export when disabled:
  * Tracer.exportToJson("/U/logs/trace.json");
  * }</pre>
  */
 public final class Tracer {
-  /** Number of frames to keep in circular buffer (~10 seconds at 50Hz) */
+  /** Number of loops to keep in circular buffer (~10 seconds at 50Hz) */
   private static final int BUFFER_SIZE = 500;
 
   /** Maximum nesting depth for traced calls */
   private static final int MAX_DEPTH = 32;
 
-  /** Circular buffer of trace frames */
-  private static final TraceFrame[] frames = new TraceFrame[BUFFER_SIZE];
+  /** Circular buffer of trace loops */
+  private static final TraceLoop[] loops = new TraceLoop[BUFFER_SIZE];
 
-  /** Current frame being written to */
-  private static TraceFrame currentFrame;
+  /** Current loop being written to */
+  private static TraceLoop currentLoop;
 
-  /** Index of current frame in circular buffer */
-  private static int frameIndex = 0;
+  /** Index of current loop in circular buffer */
+  private static int loopIndex = 0;
 
-  /** Total frame count (for frame numbering) */
-  private static int totalFrameCount = 0;
+  /** Total loop count (for loop numbering) */
+  private static int totalLoopCount = 0;
 
   /** Current nesting depth */
   private static byte currentDepth = 0;
@@ -43,54 +43,54 @@ public final class Tracer {
   /** Whether tracing is enabled */
   private static boolean enabled = true;
 
-  /** Static initializer - pre-allocate all frames */
+  /** Static initializer - pre-allocate all loops */
   static {
     for (int i = 0; i < BUFFER_SIZE; i++) {
-      frames[i] = new TraceFrame();
+      loops[i] = new TraceLoop();
     }
-    currentFrame = frames[0];
+    currentLoop = loops[0];
   }
 
   private Tracer() {} // Static only
 
   /**
-   * Begin a new trace frame. Call this at the start of robotPeriodic().
+   * Begin a new trace loop. Call this at the start of robotPeriodic().
    *
-   * <p>This advances the circular buffer and resets the current frame.
+   * <p>This advances the circular buffer and resets the current loop.
    */
-  public static void beginFrame() {
+  public static void beginLoop() {
     if (!enabled) return;
 
-    frameIndex = (frameIndex + 1) % BUFFER_SIZE;
-    currentFrame = frames[frameIndex];
-    currentFrame.reset();
-    currentFrame.frameNumber = totalFrameCount++;
+    loopIndex = (loopIndex + 1) % BUFFER_SIZE;
+    currentLoop = loops[loopIndex];
+    currentLoop.reset();
+    currentLoop.loopNumber = totalLoopCount++;
     currentDepth = 0;
 
-    // Debug: log every 250 frames (~5 seconds)
-    if (totalFrameCount % 250 == 0) {
+    // Debug: log every 250 loops (~5 seconds)
+    if (totalLoopCount % 250 == 0) {
       System.out.println(
-          "[Tracer] Frame "
-              + totalFrameCount
-              + ", spans in last frame: "
-              + getLastFrameSpanCount());
+          "[Tracer] Loop "
+              + totalLoopCount
+              + ", spans in last loop: "
+              + getLastLoopSpanCount());
     }
   }
 
-  /** Get span count from previous frame for debugging */
-  private static int getLastFrameSpanCount() {
-    int prevIndex = (frameIndex - 1 + BUFFER_SIZE) % BUFFER_SIZE;
-    return frames[prevIndex].spanCount;
+  /** Get span count from previous loop for debugging */
+  private static int getLastLoopSpanCount() {
+    int prevIndex = (loopIndex - 1 + BUFFER_SIZE) % BUFFER_SIZE;
+    return loops[prevIndex].spanCount;
   }
 
   /**
-   * End the current trace frame. Call this at the end of robotPeriodic().
+   * End the current trace loop. Call this at the end of robotPeriodic().
    *
-   * <p>Records the frame end time.
+   * <p>Records the loop end time.
    */
-  public static void endFrame() {
+  public static void endLoop() {
     if (!enabled) return;
-    currentFrame.endTime = Timer.getFPGATimestamp();
+    currentLoop.endTime = Timer.getFPGATimestamp();
   }
 
   /** Default category used when none is specified */
@@ -152,11 +152,11 @@ public final class Tracer {
    */
   public static int beginSpan(String name, String category) {
     if (!enabled) return -1;
-    if (currentFrame.spanCount >= TraceFrame.MAX_SPANS) return -1;
+    if (currentLoop.spanCount >= TraceLoop.MAX_SPANS) return -1;
     if (currentDepth >= MAX_DEPTH) return -1;
 
-    int idx = currentFrame.spanCount++;
-    TraceSpan span = currentFrame.spans[idx];
+    int idx = currentLoop.spanCount++;
+    TraceSpan span = currentLoop.spans[idx];
     span.name = name;
     span.category = (category == null || category.isEmpty()) ? DEFAULT_CATEGORY : category;
     span.depth = currentDepth++;
@@ -178,7 +178,7 @@ public final class Tracer {
   public static void endSpan(int spanIndex) {
     if (!enabled || spanIndex < 0) return;
 
-    TraceSpan span = currentFrame.spans[spanIndex];
+    TraceSpan span = currentLoop.spans[spanIndex];
     span.endNanos = System.nanoTime();
     span.complete = true;
     if (currentDepth > 0) {
@@ -200,14 +200,14 @@ public final class Tracer {
     enabled = enable;
   }
 
-  /** Get the current frame being written to */
-  public static TraceFrame getCurrentFrame() {
-    return currentFrame;
+  /** Get the current loop being written to */
+  public static TraceLoop getCurrentLoop() {
+    return currentLoop;
   }
 
-  /** Get all frames in the buffer */
-  public static TraceFrame[] getFrames() {
-    return frames;
+  /** Get all loops in the buffer */
+  public static TraceLoop[] getLoops() {
+    return loops;
   }
 
   /** Get the buffer size */
@@ -215,14 +215,14 @@ public final class Tracer {
     return BUFFER_SIZE;
   }
 
-  /** Get the current frame index in the circular buffer */
-  public static int getFrameIndex() {
-    return frameIndex;
+  /** Get the current loop index in the circular buffer */
+  public static int getLoopIndex() {
+    return loopIndex;
   }
 
-  /** Get total number of frames recorded */
-  public static int getTotalFrameCount() {
-    return totalFrameCount;
+  /** Get total number of loops recorded */
+  public static int getTotalLoopCount() {
+    return totalLoopCount;
   }
 
   /**
@@ -231,16 +231,16 @@ public final class Tracer {
    * @param path The file path to write to
    */
   public static void exportToJson(String path) {
-    TraceExporter.exportToJson(frames, frameIndex, totalFrameCount, path);
+    TraceExporter.exportToJson(loops, loopIndex, totalLoopCount, path);
   }
 
   /**
-   * Export the most recent N frames to Chrome Tracing JSON format.
+   * Export the most recent N loops to Chrome Tracing JSON format.
    *
    * @param path The file path to write to
-   * @param numFrames Number of recent frames to export
+   * @param numLoops Number of recent loops to export
    */
-  public static void exportRecentToJson(String path, int numFrames) {
-    TraceExporter.exportRecentToJson(frames, frameIndex, numFrames, path);
+  public static void exportRecentToJson(String path, int numLoops) {
+    TraceExporter.exportRecentToJson(loops, loopIndex, numLoops, path);
   }
 }
