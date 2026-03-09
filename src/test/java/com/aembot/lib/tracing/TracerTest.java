@@ -30,15 +30,15 @@ class TracerTest {
   }
 
   @Test
-  void getFrames_returnsNonNullArray() {
-    TraceFrame[] frames = Tracer.getFrames();
+  void getLoops_returnsNonNullArray() {
+    TraceLoop[] frames = Tracer.getLoops();
     assertNotNull(frames);
     assertEquals(Tracer.getBufferSize(), frames.length);
   }
 
   @Test
-  void getFrames_containsPreAllocatedFrames() {
-    TraceFrame[] frames = Tracer.getFrames();
+  void getLoops_containsPreAllocatedFrames() {
+    TraceLoop[] frames = Tracer.getLoops();
     for (int i = 0; i < frames.length; i++) {
       assertNotNull(frames[i], "Frame at index " + i + " should not be null");
     }
@@ -59,20 +59,20 @@ class TracerTest {
   }
 
   @Test
-  void getCurrentFrame_returnsNonNull() {
-    assertNotNull(Tracer.getCurrentFrame());
+  void getCurrentLoop_returnsNonNull() {
+    assertNotNull(Tracer.getCurrentLoop());
   }
 
   @Test
-  void getFrameIndex_returnsValidIndex() {
-    int index = Tracer.getFrameIndex();
+  void getLoopIndex_returnsValidIndex() {
+    int index = Tracer.getLoopIndex();
     assertTrue(index >= 0);
     assertTrue(index < Tracer.getBufferSize());
   }
 
   @Test
-  void getTotalFrameCount_returnsNonNegative() {
-    assertTrue(Tracer.getTotalFrameCount() >= 0);
+  void getTotalLoopCount_returnsNonNegative() {
+    assertTrue(Tracer.getTotalLoopCount() >= 0);
   }
 
   @Test
@@ -115,11 +115,11 @@ class TracerTest {
 
   @Test
   void frames_havePreAllocatedSpans() {
-    TraceFrame[] frames = Tracer.getFrames();
-    for (TraceFrame frame : frames) {
+    TraceLoop[] frames = Tracer.getLoops();
+    for (TraceLoop frame : frames) {
       assertNotNull(frame.spans);
-      assertEquals(TraceFrame.MAX_SPANS, frame.spans.length);
-      for (int i = 0; i < TraceFrame.MAX_SPANS; i++) {
+      assertEquals(TraceLoop.MAX_SPANS, frame.spans.length);
+      for (int i = 0; i < TraceLoop.MAX_SPANS; i++) {
         assertNotNull(frame.spans[i], "Span should be pre-allocated");
       }
     }
@@ -127,11 +127,11 @@ class TracerTest {
 
   @Test
   void currentFrame_isInFramesArray() {
-    TraceFrame current = Tracer.getCurrentFrame();
-    TraceFrame[] frames = Tracer.getFrames();
+    TraceLoop current = Tracer.getCurrentLoop();
+    TraceLoop[] frames = Tracer.getLoops();
 
     boolean found = false;
-    for (TraceFrame frame : frames) {
+    for (TraceLoop frame : frames) {
       if (frame == current) {
         found = true;
         break;

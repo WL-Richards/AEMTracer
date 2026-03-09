@@ -18,22 +18,22 @@ class TraceExporterTest {
 
   @TempDir Path tempDir;
 
-  private TraceFrame[] frames;
+  private TraceLoop[] frames;
 
   @BeforeEach
   void setUp() {
     // Create test frames by directly instantiating and setting fields
-    frames = new TraceFrame[10];
+    frames = new TraceLoop[10];
     for (int i = 0; i < frames.length; i++) {
-      frames[i] = new TraceFrame();
+      frames[i] = new TraceLoop();
     }
   }
 
   /**
    * Sets up a frame with test data.
    */
-  private void setupFrame(TraceFrame frame, int frameNumber, double startTime, double endTime) {
-    frame.frameNumber = frameNumber;
+  private void setupFrame(TraceLoop frame, int loopNumber, double startTime, double endTime) {
+    frame.loopNumber = loopNumber;
     frame.startTime = startTime;
     frame.endTime = endTime;
     frame.spanCount = 0;
@@ -42,7 +42,7 @@ class TraceExporterTest {
   /**
    * Adds a completed span to a frame.
    */
-  private void addSpan(TraceFrame frame, String name, long threadId, String threadName) {
+  private void addSpan(TraceLoop frame, String name, long threadId, String threadName) {
     int idx = frame.spanCount++;
     TraceSpan span = frame.spans[idx];
     span.name = name;
@@ -94,7 +94,7 @@ class TraceExporterTest {
 
     String content = Files.readString(outputPath);
     assertTrue(content.contains("\"name\":\"LoopOverruns\""));
-    assertTrue(content.contains("\"name\":\"FrameMarkers\""));
+    assertTrue(content.contains("\"name\":\"LoopMarkers\""));
   }
 
   @Test
@@ -120,7 +120,7 @@ class TraceExporterTest {
     TraceExporter.exportToJson(frames, 0, 1, outputPath.toString());
 
     String content = Files.readString(outputPath);
-    assertTrue(content.contains("\"name\":\"Frame Duration (ms)\""));
+    assertTrue(content.contains("\"name\":\"Loop Duration (ms)\""));
     assertTrue(content.contains("\"ph\":\"C\"")); // Counter event
   }
 
