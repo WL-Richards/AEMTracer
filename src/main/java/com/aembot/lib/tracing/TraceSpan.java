@@ -26,6 +26,9 @@ public final class TraceSpan {
   /** Thread name that this span ran on */
   public String threadName;
 
+  /** Category/subsystem for grouping (e.g., "Drivetrain", "Vision") */
+  public String category;
+
   /** Whether this span has completed (endSpan was called) */
   public boolean complete;
 
@@ -35,6 +38,7 @@ public final class TraceSpan {
     endNanos = 0;
     startFPGA = 0;
     name = null;
+    category = null;
     depth = 0;
     threadId = 0;
     threadName = null;

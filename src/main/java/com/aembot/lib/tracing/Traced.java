@@ -21,6 +21,16 @@ import java.lang.annotation.Target;
  * private void updateState() {
  *     // Custom name in trace output
  * }
+ *
+ * @Traced(category = "Drivetrain")
+ * public void drivetrainPeriodic() {
+ *     // Categorized for better organization in Perfetto
+ * }
+ *
+ * @Traced(value = "CustomName", category = "Vision")
+ * private void processTargets() {
+ *     // Both custom name and category
+ * }
  * }</pre>
  */
 @Retention(RetentionPolicy.RUNTIME)
@@ -28,4 +38,10 @@ import java.lang.annotation.Target;
 public @interface Traced {
   /** Optional custom name for the trace. Defaults to "ClassName.methodName" if empty. */
   String value() default "";
+
+  /**
+   * Optional category/subsystem for grouping traces. Examples: "Drivetrain", "Vision", "Intake".
+   * Defaults to "robot" if empty. Categories appear in Perfetto's category filter.
+   */
+  String category() default "";
 }

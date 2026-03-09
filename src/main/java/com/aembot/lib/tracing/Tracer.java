@@ -93,6 +93,9 @@ public final class Tracer {
     currentFrame.endTime = Timer.getFPGATimestamp();
   }
 
+  /** Default category used when none is specified */
+  public static final String DEFAULT_CATEGORY = "robot";
+
   /**
    * Create a trace scope for a function. Use with try-with-resources.
    *
@@ -108,7 +111,26 @@ public final class Tracer {
    * @return A TraceScope that will automatically end the span when closed
    */
   public static TraceScope trace(String name) {
-    return new TraceScope(beginSpan(name));
+    return new TraceScope(beginSpan(name, DEFAULT_CATEGORY));
+  }
+
+  /**
+   * Create a trace scope for a function with a category. Use with try-with-resources.
+   *
+   * <p>Usage:
+   *
+   * <pre>{@code
+   * try (var t = Tracer.trace("periodic", "Drivetrain")) {
+   *     // Method body - automatically timed and categorized
+   * }
+   * }</pre>
+   *
+   * @param name The name of the function/operation being traced
+   * @param category The category/subsystem (e.g., "Drivetrain", "Vision")
+   * @return A TraceScope that will automatically end the span when closed
+   */
+  public static TraceScope trace(String name, String category) {
+    return new TraceScope(beginSpan(name, category));
   }
 
   /**
@@ -118,6 +140,17 @@ public final class Tracer {
    * @return The span index (pass to endSpan), or -1 if tracing is disabled/full
    */
   public static int beginSpan(String name) {
+    return beginSpan(name, DEFAULT_CATEGORY);
+  }
+
+  /**
+   * Begin a trace span for a function call with a category.
+   *
+   * @param name The name of the function/operation being traced
+   * @param category The category/subsystem (e.g., "Drivetrain", "Vision")
+   * @return The span index (pass to endSpan), or -1 if tracing is disabled/full
+   */
+  public static int beginSpan(String name, String category) {
     if (!enabled) return -1;
     if (currentFrame.spanCount >= TraceFrame.MAX_SPANS) return -1;
     if (currentDepth >= MAX_DEPTH) return -1;
@@ -125,6 +158,7 @@ public final class Tracer {
     int idx = currentFrame.spanCount++;
     TraceSpan span = currentFrame.spans[idx];
     span.name = name;
+    span.category = (category == null || category.isEmpty()) ? DEFAULT_CATEGORY : category;
     span.depth = currentDepth++;
     Thread currentThread = Thread.currentThread();
     span.threadId = currentThread.getId();

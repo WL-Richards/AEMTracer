@@ -25,6 +25,22 @@ dependencies {
     // ByteBuddy for annotation-based tracing
     api 'net.bytebuddy:byte-buddy:1.14.12'
     api 'net.bytebuddy:byte-buddy-agent:1.14.12'
+
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
+    testImplementation 'edu.wpi.first.wpilibj:wpilibj-java:2026.1.1'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+    jvmArgs '-XX:+EnableDynamicAgentLoading'
 }
 
 publishing {

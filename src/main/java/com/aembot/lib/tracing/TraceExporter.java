@@ -163,9 +163,14 @@ public final class TraceExporter {
         double durUs = span.getDurationMicros();
         int tid = threadIdToTid.getOrDefault(span.threadId, 10);
 
+        String cat = (span.category != null && !span.category.isEmpty())
+            ? span.category : "robot";
+
         json.append(",\n{\"name\":\"");
         escapeJsonString(json, span.name);
-        json.append("\",\"cat\":\"robot\",\"ph\":\"X\",\"ts\":");
+        json.append("\",\"cat\":\"");
+        escapeJsonString(json, cat);
+        json.append("\",\"ph\":\"X\",\"ts\":");
         json.append(String.format("%.3f", startUs));
         json.append(",\"dur\":");
         json.append(String.format("%.3f", durUs));
@@ -175,7 +180,9 @@ public final class TraceExporter {
         json.append(frame.frameNumber);
         json.append(",\"thread\":");
         json.append(span.threadId);
-        json.append("}}");
+        json.append(",\"category\":\"");
+        escapeJsonString(json, cat);
+        json.append("\"}}");
       }
     }
 

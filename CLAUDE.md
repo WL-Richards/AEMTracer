@@ -24,21 +24,24 @@ TraceExporter                  <- Exports to Chrome Tracing JSON format
 
 | File | Purpose |
 |------|---------|
-| `Traced.java` | `@Traced` annotation for methods |
+| `Traced.java` | `@Traced` annotation for methods (supports `category` attribute) |
 | `Tracer.java` | Core API: `beginFrame()`, `endFrame()`, `beginSpan()`, `endSpan()` |
 | `TraceFrame.java` | Container for one robot loop iteration (holds TraceSpans) |
-| `TraceSpan.java` | Single traced method call with timing and thread info |
+| `TraceSpan.java` | Single traced method call with timing, thread, and category info |
 | `TraceScope.java` | AutoCloseable for try-with-resources manual tracing |
 | `TraceExporter.java` | Exports buffer to Chrome Tracing JSON |
-| `TracingBootstrap.java` | ByteBuddy agent installation |
-| `TracingInterceptor.java` | ByteBuddy method delegation target |
+| `TracingBootstrap.java` | ByteBuddy agent installation (includes Command tracing) |
+| `TracingInterceptor.java` | ByteBuddy method delegation target for @Traced |
+| `CommandTracingInterceptor.java` | ByteBuddy delegation target for Command lifecycle |
 
 ## Design Decisions
 
-- **Pre-allocated circular buffer**: 500 frames x 128 spans to avoid GC during robot loop
+- **Pre-allocated circular buffer**: 500 frames x 256 spans to avoid GC during robot loop
 - **ByteBuddy over AspectJ**: AspectJ conflicts with GradleRIO; ByteBuddy self-attaches at runtime
 - **Thread detection**: Captures `Thread.currentThread().getId()` and `getName()` to separate Notifier threads
 - **Chrome Tracing JSON**: Compatible with Perfetto UI and chrome://tracing
+- **Subsystem categories**: Spans can be categorized (Drivetrain, Vision, etc.) for Perfetto filtering
+- **Command integration**: Auto-traces WPILib Command lifecycle (initialize, execute, isFinished, end)
 
 ## Build Commands
 
@@ -68,6 +71,7 @@ dependencies {
 // Main.java - install before robot classes load
 public static void main(String... args) {
     TracingBootstrap.install();
+    TracingBootstrap.installCommandTracing(); // Optional: auto-trace Commands
     RobotBase.startRobot(Robot::new);
 }
 
@@ -82,6 +86,19 @@ public void robotPeriodic() {
 @Traced
 public void periodic() { ... }
 
+// With subsystem category for better organization in Perfetto
+@Traced(category = "Drivetrain")
+public void drivetrainPeriodic() { ... }
+
+// Both custom name and category
+@Traced(value = "ProcessTargets", category = "Vision")
+private void processVisionTargets() { ... }
+
+// Manual tracing with category
+try (var t = Tracer.trace("calculate", "Shooter")) {
+    // timed operation
+}
+
 // Export when disabled
 Tracer.exportToJson("trace_" + System.currentTimeMillis() + ".json");
 ```
@@ -93,11 +110,12 @@ Exports to Chrome Tracing JSON with:
 - **LoopOverruns track**: Markers for frames > 20ms
 - **FrameMarkers track**: Frame boundary indicators
 - **Per-thread tracks**: Main thread and Notifier threads separated
+- **Category filtering**: Filter by subsystem (Drivetrain, Vision, Command, etc.) in Perfetto
 
-View traces at https://ui.perfetto.dev
+View traces at [Perfetto UI](https://ui.perfetto.dev)
 
 ## Performance Targets
 
 - Span overhead: ~100ns per traced method
-- Memory: ~50KB for 500-frame buffer
+- Memory: ~100KB for 500-frame buffer
 - Zero allocations during normal operation

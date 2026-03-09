@@ -7,8 +7,8 @@ import edu.wpi.first.wpilibj.Timer;
  * during robot loop.
  */
 public final class TraceFrame {
-  /** Maximum number of spans per frame (128 should be plenty for one loop) */
-  public static final int MAX_SPANS = 128;
+  /** Maximum number of spans per frame (256 to accommodate command tracing) */
+  public static final int MAX_SPANS = 256;
 
   /** Pre-allocated array of spans */
   public final TraceSpan[] spans;

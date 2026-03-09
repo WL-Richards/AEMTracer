@@ -1,5 +1,6 @@
 package com.aembot.lib.tracing;
 
+import java.lang.instrument.Instrumentation;
 import net.bytebuddy.agent.ByteBuddyAgent;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.implementation.MethodDelegation;
@@ -26,6 +27,8 @@ public final class TracingBootstrap {
 
   private static boolean installed = false;
   private static boolean installFailed = false;
+  private static boolean commandTracingInstalled = false;
+  private static Instrumentation instrumentation = null;
 
   private TracingBootstrap() {} // Static only
 
@@ -47,7 +50,7 @@ public final class TracingBootstrap {
       System.out.println("[TracingBootstrap] Installing ByteBuddy agent...");
 
       // Self-attach to the running JVM to get an Instrumentation instance
-      var instrumentation = ByteBuddyAgent.install();
+      instrumentation = ByteBuddyAgent.install();
 
       // Create an agent that intercepts all @Traced methods
       new AgentBuilder.Default()
@@ -87,5 +90,74 @@ public final class TracingBootstrap {
   /** Check if the tracing instrumentation was successfully installed */
   public static boolean isInstalled() {
     return installed;
+  }
+
+  /**
+   * Install automatic tracing for WPILib Command lifecycle methods.
+   * Traces initialize(), execute(), isFinished(), and end() on all Command subclasses.
+   *
+   * <p>Must be called after {@link #install()} and before Command classes are loaded.
+   *
+   * <p>Usage:
+   * <pre>{@code
+   * public static void main(String... args) {
+   *     TracingBootstrap.install();
+   *     TracingBootstrap.installCommandTracing();
+   *     RobotBase.startRobot(Robot::new);
+   * }
+   * }</pre>
+   *
+   * @return true if installation succeeded, false if it failed
+   */
+  public static boolean installCommandTracing() {
+    if (commandTracingInstalled) {
+      return true;
+    }
+    if (!installed || instrumentation == null) {
+      System.err.println("[TracingBootstrap] Must call install() before installCommandTracing()");
+      return false;
+    }
+
+    try {
+      System.out.println("[TracingBootstrap] Installing Command tracing...");
+
+      // Intercept Command lifecycle methods
+      new AgentBuilder.Default()
+          // Ignore JDK and library classes
+          .ignore(ElementMatchers.nameStartsWith("java."))
+          .ignore(ElementMatchers.nameStartsWith("jdk."))
+          .ignore(ElementMatchers.nameStartsWith("sun."))
+          .ignore(ElementMatchers.nameStartsWith("com.sun."))
+          .ignore(ElementMatchers.nameStartsWith("net.bytebuddy."))
+          // Match classes that extend edu.wpi.first.wpilibj2.command.Command
+          .type(ElementMatchers.hasSuperType(
+              ElementMatchers.named("edu.wpi.first.wpilibj2.command.Command")))
+          .transform(
+              (builder, typeDescription, classLoader, module, protectionDomain) ->
+                  builder
+                      // Intercept initialize(), execute(), isFinished(), end()
+                      .method(ElementMatchers.named("initialize")
+                          .or(ElementMatchers.named("execute"))
+                          .or(ElementMatchers.named("isFinished"))
+                          .or(ElementMatchers.named("end")))
+                      .intercept(MethodDelegation.to(CommandTracingInterceptor.class)))
+          .with(AgentBuilder.RedefinitionStrategy.RETRANSFORMATION)
+          .with(AgentBuilder.Listener.StreamWriting.toSystemOut().withTransformationsOnly())
+          .installOn(instrumentation);
+
+      commandTracingInstalled = true;
+      System.out.println("[TracingBootstrap] Successfully installed Command tracing");
+      return true;
+
+    } catch (Exception e) {
+      System.err.println("[TracingBootstrap] Failed to install Command tracing: " + e.getMessage());
+      e.printStackTrace();
+      return false;
+    }
+  }
+
+  /** Check if Command tracing was successfully installed */
+  public static boolean isCommandTracingInstalled() {
+    return commandTracingInstalled;
   }
 }

@@ -28,17 +28,22 @@ public class TracingInterceptor {
       return callable.call();
     }
 
-    // Get the trace name from annotation or generate from method signature
+    // Get the trace name and category from annotation or generate from method signature
     Traced annotation = method.getAnnotation(Traced.class);
     String name;
-    if (annotation != null && !annotation.value().isEmpty()) {
-      name = annotation.value();
+    String category;
+    if (annotation != null) {
+      name = annotation.value().isEmpty()
+          ? method.getDeclaringClass().getSimpleName() + "." + method.getName()
+          : annotation.value();
+      category = annotation.category();
     } else {
       name = method.getDeclaringClass().getSimpleName() + "." + method.getName();
+      category = Tracer.DEFAULT_CATEGORY;
     }
 
     // Begin span, call method, end span
-    int spanIndex = Tracer.beginSpan(name);
+    int spanIndex = Tracer.beginSpan(name, category);
     try {
       return callable.call();
     } finally {
