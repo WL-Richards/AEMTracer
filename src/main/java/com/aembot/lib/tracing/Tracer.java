@@ -2,6 +2,7 @@ package com.aembot.lib.tracing;
 
 import edu.wpi.first.wpilibj.Timer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,8 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * }</pre>
  */
 public final class Tracer {
-  /** Number of loops to keep in circular buffer (~10 seconds at 50Hz) */
-  private static final int BUFFER_SIZE = 500;
+  /** Number of loops to keep in circular buffer (~5 seconds at 50Hz) */
+  private static final int BUFFER_SIZE = 250;
 
   /** Maximum nesting depth for traced calls */
   private static final int MAX_DEPTH = 32;
@@ -50,11 +51,18 @@ public final class Tracer {
   /** Default category used when none is specified */
   public static final String DEFAULT_CATEGORY = "robot";
 
-  /** Category registry - maps category strings to indices */
+  /** Category registry - index to name (for export) */
   private static final List<String> categories = new ArrayList<>();
 
-  /** Thread name cache - maps thread ID to name (populated on first encounter) */
+  /** Category lookup - name to index (O(1) lookup) */
+  private static final Map<String, Byte> categoryToIndex = new HashMap<>();
+
+  /** Thread name cache - maps thread ID to name (populated during export) */
   private static final Map<Long, String> threadNames = new ConcurrentHashMap<>();
+
+  /** Per-thread cached thread ID to avoid native call overhead */
+  private static final ThreadLocal<Long> cachedThreadId =
+      ThreadLocal.withInitial(() -> Thread.currentThread().getId());
 
   /** Static initializer - pre-allocate all loops */
   static {
@@ -64,28 +72,32 @@ public final class Tracer {
     currentLoop = loops[0];
     // Register default category at index 0
     categories.add(DEFAULT_CATEGORY);
+    categoryToIndex.put(DEFAULT_CATEGORY, (byte) 0);
   }
 
   private Tracer() {} // Static only
 
   /**
    * Get or register a category index. Returns existing index if category already registered.
+   * Uses HashMap for O(1) lookup. Public for use by interceptors that cache the index.
    *
    * @param category The category name
    * @return The byte index for this category
    */
-  private static byte getCategoryIndex(String category) {
+  public static byte getCategoryIndex(String category) {
     if (category == null || category.isEmpty()) {
       return 0; // DEFAULT_CATEGORY
     }
-    int idx = categories.indexOf(category);
-    if (idx >= 0) {
-      return (byte) idx;
+    Byte idx = categoryToIndex.get(category);
+    if (idx != null) {
+      return idx;
     }
     // Register new category (capped at 127 to fit in signed byte)
     if (categories.size() < 127) {
+      byte newIdx = (byte) categories.size();
       categories.add(category);
-      return (byte) (categories.size() - 1);
+      categoryToIndex.put(category, newIdx);
+      return newIdx;
     }
     return 0; // Fall back to default if too many categories
   }
@@ -185,6 +197,18 @@ public final class Tracer {
    * @return The span index (pass to endSpan), or -1 if tracing is disabled/full
    */
   public static int beginSpan(String name, String category) {
+    return beginSpan(name, getCategoryIndex(category));
+  }
+
+  /**
+   * Begin a trace span with a pre-resolved category index. Faster than string category lookup.
+   * Use this from interceptors that cache the category index at first call.
+   *
+   * @param name The name of the function/operation being traced
+   * @param categoryIndex The category index (from getCategoryIndex)
+   * @return The span index (pass to endSpan), or -1 if tracing is disabled/full
+   */
+  public static int beginSpan(String name, byte categoryIndex) {
     if (!enabled) return -1;
     if (currentLoop.spanCount >= TraceLoop.MAX_SPANS) return -1;
     if (currentDepth >= MAX_DEPTH) return -1;
@@ -192,13 +216,9 @@ public final class Tracer {
     int idx = currentLoop.spanCount++;
     TraceSpan span = currentLoop.spans[idx];
     span.name = name;
-    span.categoryIndex = getCategoryIndex(category);
+    span.categoryIndex = categoryIndex;
     span.depth = currentDepth++;
-    Thread currentThread = Thread.currentThread();
-    long tid = currentThread.getId();
-    span.threadId = tid;
-    // Cache thread name on first encounter (avoids storing per-span)
-    threadNames.computeIfAbsent(tid, k -> currentThread.getName());
+    span.threadId = cachedThreadId.get();
     span.startNanos = System.nanoTime();
     span.complete = false;
 

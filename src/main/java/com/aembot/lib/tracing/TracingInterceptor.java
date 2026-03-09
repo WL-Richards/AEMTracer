@@ -2,6 +2,7 @@ package com.aembot.lib.tracing;
 
 import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import net.bytebuddy.implementation.bind.annotation.*;
 
 /**
@@ -9,6 +10,45 @@ import net.bytebuddy.implementation.bind.annotation.*;
  * methods at class load time and automatically records span timing.
  */
 public class TracingInterceptor {
+
+  /** Cached method metadata to avoid repeated reflection and string operations */
+  private static final ConcurrentHashMap<Method, MethodTraceInfo> methodCache =
+      new ConcurrentHashMap<>();
+
+  /** Pre-computed trace info for a method */
+  private static final class MethodTraceInfo {
+    final String name;
+    final byte categoryIndex;
+
+    MethodTraceInfo(String name, byte categoryIndex) {
+      this.name = name;
+      this.categoryIndex = categoryIndex;
+    }
+  }
+
+  /**
+   * Get or compute the trace info for a method.
+   *
+   * @param method The method to get trace info for
+   * @return The cached or newly computed trace info
+   */
+  private static MethodTraceInfo getTraceInfo(Method method) {
+    return methodCache.computeIfAbsent(method, m -> {
+      Traced annotation = m.getAnnotation(Traced.class);
+      String name;
+      String category;
+      if (annotation != null) {
+        name = annotation.value().isEmpty()
+            ? m.getDeclaringClass().getSimpleName() + "." + m.getName()
+            : annotation.value();
+        category = annotation.category();
+      } else {
+        name = m.getDeclaringClass().getSimpleName() + "." + m.getName();
+        category = Tracer.DEFAULT_CATEGORY;
+      }
+      return new MethodTraceInfo(name, Tracer.getCategoryIndex(category));
+    });
+  }
 
   /**
    * Intercepts a @Traced method call, wrapping it with tracing.
@@ -28,22 +68,11 @@ public class TracingInterceptor {
       return callable.call();
     }
 
-    // Get the trace name and category from annotation or generate from method signature
-    Traced annotation = method.getAnnotation(Traced.class);
-    String name;
-    String category;
-    if (annotation != null) {
-      name = annotation.value().isEmpty()
-          ? method.getDeclaringClass().getSimpleName() + "." + method.getName()
-          : annotation.value();
-      category = annotation.category();
-    } else {
-      name = method.getDeclaringClass().getSimpleName() + "." + method.getName();
-      category = Tracer.DEFAULT_CATEGORY;
-    }
+    // Get cached trace info (computed once per method)
+    MethodTraceInfo info = getTraceInfo(method);
 
     // Begin span, call method, end span
-    int spanIndex = Tracer.beginSpan(name, category);
+    int spanIndex = Tracer.beginSpan(info.name, info.categoryIndex);
     try {
       return callable.call();
     } finally {

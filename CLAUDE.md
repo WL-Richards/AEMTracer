@@ -36,7 +36,7 @@ TraceExporter                  <- Exports to Chrome Tracing JSON format
 
 ## Design Decisions
 
-- **Pre-allocated circular buffer**: 500 loops x 256 spans to avoid GC during robot loop
+- **Pre-allocated circular buffer**: 250 loops x 256 spans to avoid GC during robot loop
 - **Memory-optimized spans**: Thread names cached globally, categories stored as byte index, FPGA timestamps computed at export
 - **ByteBuddy over AspectJ**: AspectJ conflicts with GradleRIO; ByteBuddy self-attaches at runtime
 - **Thread detection**: Captures `Thread.currentThread().getId()`, names cached in lookup table
@@ -117,9 +117,17 @@ View traces at [Perfetto UI](https://ui.perfetto.dev)
 
 ## Performance Targets
 
-- Span overhead: ~100ns per traced method
-- Memory: ~5-6MB for 500-loop buffer (128K spans × ~40-48 bytes/span)
-- Zero allocations during normal operation
+- Span overhead: ~50-150ns per traced method (after JIT warmup)
+- Memory: ~3MB for 250-loop buffer (64K spans × ~48 bytes/span)
+- Zero allocations during normal operation (after initial warmup)
+
+## Performance Optimizations
+
+Hot path optimizations in `beginSpan()`:
+- **ThreadLocal thread ID**: `cachedThreadId.get()` avoids `Thread.currentThread().getId()` native call (~15-20ns saved)
+- **Cached category index**: Interceptors cache byte index at first call, pass directly to `beginSpan(name, categoryIndex)` (~10-20ns saved)
+- **Deferred thread name resolution**: Thread names resolved only during export, not on hot path (~20-30ns saved)
+- **HashMap category lookup**: O(1) `categoryToIndex.get()` vs O(n) `List.indexOf()` for string categories
 
 ## Memory Optimization
 

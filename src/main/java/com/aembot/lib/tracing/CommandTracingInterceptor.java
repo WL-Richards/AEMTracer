@@ -13,6 +13,9 @@ public class CommandTracingInterceptor {
   /** Category used for all Command traces */
   public static final String COMMAND_CATEGORY = "Command";
 
+  /** Cached category index (resolved once on first use) */
+  private static byte cachedCategoryIndex = -1;
+
   /** Cached getName method for performance */
   private static Method getNameMethod = null;
   private static boolean getNameMethodResolved = false;
@@ -44,8 +47,13 @@ public class CommandTracingInterceptor {
     String methodName = method.getName();
     String traceName = commandName + "." + methodName;
 
+    // Cache category index on first use
+    if (cachedCategoryIndex < 0) {
+      cachedCategoryIndex = Tracer.getCategoryIndex(COMMAND_CATEGORY);
+    }
+
     // Begin span, call method, end span
-    int spanIndex = Tracer.beginSpan(traceName, COMMAND_CATEGORY);
+    int spanIndex = Tracer.beginSpan(traceName, cachedCategoryIndex);
     try {
       return callable.call();
     } finally {

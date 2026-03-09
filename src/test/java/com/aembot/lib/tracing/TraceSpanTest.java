@@ -147,7 +147,7 @@ class TraceSpanTest {
     int alignedSize = ((rawSize + 7) / 8) * 8;
 
     int spansPerLoop = 256;
-    int loopCount = 500;
+    int loopCount = 250;
     int totalSpans = spansPerLoop * loopCount;
     long totalSpanMemory = (long) totalSpans * alignedSize;
 

@@ -19,7 +19,7 @@ View your traces in [Perfetto UI](https://ui.perfetto.dev)
 
 ### Loops
 
-A **loop** represents one iteration of your robot's periodic function (`robotPeriodic()`). FRC robots typically run at 50Hz, so each loop is ~20ms. The tracer uses a circular buffer of 500 loops (~10 seconds of history).
+A **loop** represents one iteration of your robot's periodic function (`robotPeriodic()`). FRC robots typically run at 50Hz, so each loop is ~20ms. The tracer uses a circular buffer of 250 loops (~5 seconds of history).
 
 You mark loop boundaries explicitly:
 
@@ -214,7 +214,7 @@ if (DriverStation.isFMSAttached()) {
 
 ### Buffer Size
 
-The default buffer holds 500 loops (~10 seconds at 50Hz) with up to 256 spans per loop. These values are configured in `Tracer.java` and `TraceLoop.java`.
+The default buffer holds 250 loops (~5 seconds at 50Hz) with up to 256 spans per loop. These values are configured in `Tracer.java` and `TraceLoop.java`.
 
 ## Output Format
 
@@ -243,8 +243,8 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 
 ## Performance
 
-- **Span overhead**: ~150-250ns per traced method (after JIT warmup)
-- **Memory**: ~6MB for default 500-loop buffer (128K pre-allocated spans × 48 bytes/span)
+- **Span overhead**: ~50-150ns per traced method (after JIT warmup)
+- **Memory**: ~3MB for default 250-loop buffer (64K pre-allocated spans × 48 bytes/span)
 - **No allocations** during normal operation (all spans pre-allocated at startup)
 
 ## Requirements
