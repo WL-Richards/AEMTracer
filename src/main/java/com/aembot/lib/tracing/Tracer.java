@@ -113,9 +113,10 @@ public final class Tracer {
   public static void beginLoop() {
     if (!enabled) return;
 
-    // Capture main thread ID on first call (robot main thread calls beginLoop)
+    // Capture main thread ID and name on first call (robot main thread calls beginLoop)
     if (mainThreadId < 0) {
       mainThreadId = Thread.currentThread().getId();
+      threadNames.put(mainThreadId, "robot main");
     }
 
     loopIndex = (loopIndex + 1) % BUFFER_SIZE;
@@ -231,6 +232,10 @@ public final class Tracer {
     if (tid < 0 || Thread.currentThread().getId() != tid) {
       // Not main thread or main thread not yet identified - use cached ThreadLocal
       tid = cachedThreadId.get()[0];
+      // Lazy cache thread name on first span from this thread
+      if (!threadNames.containsKey(tid)) {
+        threadNames.put(tid, Thread.currentThread().getName());
+      }
     }
     span.threadId = tid;
     span.startNanos = System.nanoTime();
