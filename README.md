@@ -2,7 +2,9 @@
 
 A lightweight, high-performance tracing library for FRC robots. Generate timeline visualizations of your robot code execution with minimal overhead.
 
-View your traces in [Perfetto UI](https://ui.perfetto.dev)
+[![CI](https://github.com/aembot/AEMTracer/actions/workflows/ci.yml/badge.svg)](https://github.com/aembot/AEMTracer/actions/workflows/ci.yml)
+
+[Documentation](https://aembot.github.io/AEMTracer/) | [API Reference](https://aembot.github.io/AEMTracer/javadoc/) | [Test Results](https://aembot.github.io/AEMTracer/tests/) | [Perfetto UI](https://ui.perfetto.dev)
 
 ## Features
 
@@ -241,10 +243,10 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 - `Command` - Command lifecycle methods (if command tracing enabled)
 - Custom categories (e.g., `Drivetrain`, `Vision`, `Shooter`)
 
-## Performance (Assuming max span count)
+## Performance
 
 - **Span overhead**: ~70-200ns per traced method on roboRIO (after JIT warmup)
-- **Memory**: ~2.94MB for default 250-loop buffer
+- **Memory**: ~2.94MB for default 250-loop buffer (see [live stats](https://aembot.github.io/AEMTracer/))
 - **No allocations** during normal operation (all spans pre-allocated at startup)
 
 ### Span Overhead Breakdown
@@ -263,19 +265,7 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 | **Total main thread** | **~70-180ns** | |
 | **Total other threads** | **~80-200ns** | |
 
-*Estimates based on ARM Cortex-A9 cycle counts (~1.15ns/cycle @ 866MHz). Actual overhead varies by JIT state. Cold calls may be 2-3x slower.*
-
-### Memory Breakdown
-
-```
-=== TraceSpan Memory Estimate ===
-Raw span size: 43 bytes
-Aligned span size: 48 bytes
-Total spans: 64000 (250 loops × 256 spans)
-Span memory: 3072000 bytes (3000 KB)
-Loop overhead: 12000 bytes
-Total buffer memory: 3084000 bytes (~2.94 MB)
-```
+*Estimates based on ARM Cortex-A9 cycle counts. Actual overhead varies by JIT state. Cold calls may be 2-3x slower.*
 
 ## Requirements
 

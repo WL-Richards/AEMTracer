@@ -1,0 +1,158 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and Test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build test javadoc 2>&1 | tee build-output.txt
+
+      - name: Extract memory stats
+        run: |
+          # Extract memory test output
+          grep -A 10 "=== TraceSpan Memory Estimate ===" build-output.txt > memory-stats.txt || echo "Memory stats not found" > memory-stats.txt
+          cat memory-stats.txt
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p _site
+
+          # Copy Javadoc
+          cp -r build/docs/javadoc _site/javadoc
+
+          # Copy test results
+          cp -r build/reports/tests/test _site/tests
+
+          # Create index page
+          cat > _site/index.html << EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>AEMTracer Documentation</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                line-height: 1.6;
+              }
+              h1 { color: #1a1a2e; }
+              a {
+                color: #4361ee;
+                text-decoration: none;
+              }
+              a:hover { text-decoration: underline; }
+              .card {
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin: 1rem 0;
+              }
+              .card h2 { margin-top: 0; }
+              code {
+                background: #f4f4f4;
+                padding: 0.2em 0.4em;
+                border-radius: 3px;
+              }
+              pre {
+                background: #f4f4f4;
+                padding: 1rem;
+                border-radius: 6px;
+                overflow-x: auto;
+              }
+              pre code {
+                padding: 0;
+                background: none;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>AEMTracer</h1>
+            <p>A lightweight, high-performance tracing library for FRC robots.</p>
+
+            <div class="card">
+              <h2>API Documentation</h2>
+              <p>Full Javadoc API reference for all public classes and methods.</p>
+              <p><a href="javadoc/">View Javadoc</a></p>
+            </div>
+
+            <div class="card">
+              <h2>Test Results</h2>
+              <p>Latest test results from the CI build.</p>
+              <p><a href="tests/">View Test Results</a></p>
+            </div>
+
+            <div class="card">
+              <h2>Memory Usage</h2>
+              <p>Latest memory statistics from CI:</p>
+              <pre><code>$(cat memory-stats.txt)</code></pre>
+            </div>
+
+            <div class="card">
+              <h2>Quick Start</h2>
+              <p>Add to your <code>build.gradle</code>:</p>
+              <pre><code>repositories {
+            maven { url 'https://jitpack.io' }
+          }
+          dependencies {
+            implementation 'com.github.aembot:AEMTracer:1.0.0'
+          }</code></pre>
+            </div>
+
+            <p>
+              <a href="https://github.com/aembot/AEMTracer">GitHub Repository</a> |
+              <a href="https://ui.perfetto.dev">View Traces in Perfetto</a>
+            </p>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
