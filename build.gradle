@@ -1,0 +1,64 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.aembot.lib'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+    withJavadocJar()
+}
+
+repositories {
+    mavenCentral()
+    maven { url "https://frcmaven.wpi.edu/artifactory/release" }
+}
+
+dependencies {
+    // WPILib for Timer.getFPGATimestamp()
+    compileOnly 'edu.wpi.first.wpilibj:wpilibj-java:2026.1.1'
+
+    // ByteBuddy for annotation-based tracing
+    api 'net.bytebuddy:byte-buddy:1.14.12'
+    api 'net.bytebuddy:byte-buddy-agent:1.14.12'
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+
+            pom {
+                name = 'AEMTracer'
+                description = 'Lightweight tracing library for FRC robots with Perfetto-compatible output'
+                url = 'https://github.com/aembot/AEMTracer'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'local'
+            url = layout.buildDirectory.dir('repo')
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
