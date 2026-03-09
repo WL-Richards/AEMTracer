@@ -51,7 +51,7 @@ publishing {
             pom {
                 name = 'AEMTracer'
                 description = 'Lightweight tracing library for FRC robots with Perfetto-compatible output'
-                url = 'https://github.com/aembot/AEMTracer'
+                url = 'https://github.com/WL-Richards/AEMTracer'
 
                 licenses {
                     license {

@@ -126,12 +126,12 @@ jobs:
             maven { url 'https://jitpack.io' }
           }
           dependencies {
-            implementation 'com.github.aembot:AEMTracer:1.0.0'
+            implementation 'com.github.WL-Richards:AEMTracer:1.0.0'
           }</code></pre>
             </div>
 
             <p>
-              <a href="https://github.com/aembot/AEMTracer">GitHub Repository</a> |
+              <a href="https://github.com/WL-Richards/AEMTracer">GitHub Repository</a> |
               <a href="https://ui.perfetto.dev">View Traces in Perfetto</a>
             </p>
           </body>

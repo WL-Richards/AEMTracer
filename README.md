@@ -2,9 +2,9 @@
 
 A lightweight, high-performance tracing library for FRC robots. Generate timeline visualizations of your robot code execution with minimal overhead.
 
-[![CI](https://github.com/aembot/AEMTracer/actions/workflows/ci.yml/badge.svg)](https://github.com/aembot/AEMTracer/actions/workflows/ci.yml)
+[![CI](https://github.com/WL-Richards/AEMTracer/actions/workflows/ci.yml/badge.svg)](https://github.com/WL-Richards/AEMTracer/actions/workflows/ci.yml)
 
-[Documentation](https://aembot.github.io/AEMTracer/) | [API Reference](https://aembot.github.io/AEMTracer/javadoc/) | [Test Results](https://aembot.github.io/AEMTracer/tests/) | [Perfetto UI](https://ui.perfetto.dev)
+[Documentation](https://wl-richards.github.io/AEMTracer/) | [API Reference](https://wl-richards.github.io/AEMTracer/javadoc/) | [Test Results](https://wl-richards.github.io/AEMTracer/tests/) | [Perfetto UI](https://ui.perfetto.dev)
 
 ## Features
 
@@ -70,7 +70,7 @@ Then add the dependency:
 
 ```gradle
 dependencies {
-    implementation 'com.github.aembot:AEMTracer:1.0.0'
+    implementation 'com.github.WL-Richards:AEMTracer:1.0.0'
 }
 ```
 
@@ -246,7 +246,7 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 ## Performance
 
 - **Span overhead**: ~70-200ns per traced method on roboRIO (after JIT warmup)
-- **Memory**: ~2.94MB for default 250-loop buffer (see [live stats](https://aembot.github.io/AEMTracer/))
+- **Memory**: ~2.94MB for default 250-loop buffer (see [live stats](https://wl-richards.github.io/AEMTracer/))
 - **No allocations** during normal operation (all spans pre-allocated at startup)
 
 ### Span Overhead Breakdown
