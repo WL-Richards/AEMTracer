@@ -60,9 +60,12 @@ public final class Tracer {
   /** Thread name cache - maps thread ID to name (populated during export) */
   private static final Map<Long, String> threadNames = new ConcurrentHashMap<>();
 
-  /** Per-thread cached thread ID to avoid native call overhead */
-  private static final ThreadLocal<Long> cachedThreadId =
-      ThreadLocal.withInitial(() -> Thread.currentThread().getId());
+  /** Main thread ID - captured on first beginLoop() call for fast path */
+  private static long mainThreadId = -1;
+
+  /** Cached thread ID for non-main threads (avoids repeated native calls) */
+  private static final ThreadLocal<long[]> cachedThreadId =
+      ThreadLocal.withInitial(() -> new long[] {Thread.currentThread().getId()});
 
   /** Static initializer - pre-allocate all loops */
   static {
@@ -109,6 +112,11 @@ public final class Tracer {
    */
   public static void beginLoop() {
     if (!enabled) return;
+
+    // Capture main thread ID on first call (robot main thread calls beginLoop)
+    if (mainThreadId < 0) {
+      mainThreadId = Thread.currentThread().getId();
+    }
 
     loopIndex = (loopIndex + 1) % BUFFER_SIZE;
     currentLoop = loops[loopIndex];
@@ -218,7 +226,13 @@ public final class Tracer {
     span.name = name;
     span.categoryIndex = categoryIndex;
     span.depth = currentDepth++;
-    span.threadId = cachedThreadId.get();
+    // Fast path: most spans are on main thread, avoid ThreadLocal lookup
+    long tid = mainThreadId;
+    if (tid < 0 || Thread.currentThread().getId() != tid) {
+      // Not main thread or main thread not yet identified - use cached ThreadLocal
+      tid = cachedThreadId.get()[0];
+    }
+    span.threadId = tid;
     span.startNanos = System.nanoTime();
     span.complete = false;
 

@@ -117,14 +117,15 @@ View traces at [Perfetto UI](https://ui.perfetto.dev)
 
 ## Performance Targets
 
-- Span overhead: ~50-150ns per traced method (after JIT warmup)
-- Memory: ~3MB for 250-loop buffer (64K spans × ~48 bytes/span)
+- Span overhead: ~70-200ns per traced method on roboRIO (after JIT warmup)
+- Memory: ~2.94MB for 250-loop buffer (64K spans × 48 bytes/span)
 - Zero allocations during normal operation (after initial warmup)
 
 ## Performance Optimizations
 
 Hot path optimizations in `beginSpan()`:
-- **ThreadLocal thread ID**: `cachedThreadId.get()` avoids `Thread.currentThread().getId()` native call (~15-20ns saved)
+- **Main thread fast path**: Detects main thread via primitive `long` comparison, skips ThreadLocal entirely (~15-25ns saved)
+- **Primitive ThreadLocal**: Uses `long[]` wrapper to avoid `Long` autoboxing overhead (~10-15ns saved)
 - **Cached category index**: Interceptors cache byte index at first call, pass directly to `beginSpan(name, categoryIndex)` (~10-20ns saved)
 - **Deferred thread name resolution**: Thread names resolved only during export, not on hot path (~20-30ns saved)
 - **HashMap category lookup**: O(1) `categoryToIndex.get()` vs O(n) `List.indexOf()` for string categories

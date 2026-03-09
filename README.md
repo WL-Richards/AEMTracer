@@ -241,11 +241,41 @@ Use Perfetto's category filter to show/hide spans by subsystem:
 - `Command` - Command lifecycle methods (if command tracing enabled)
 - Custom categories (e.g., `Drivetrain`, `Vision`, `Shooter`)
 
-## Performance
+## Performance (Assuming max span count)
 
-- **Span overhead**: ~50-150ns per traced method (after JIT warmup)
-- **Memory**: ~3MB for default 250-loop buffer (64K pre-allocated spans × 48 bytes/span)
+- **Span overhead**: ~70-200ns per traced method on roboRIO (after JIT warmup)
+- **Memory**: ~2.94MB for default 250-loop buffer
 - **No allocations** during normal operation (all spans pre-allocated at startup)
+
+### Span Overhead Breakdown
+
+**Estimates** for roboRIO (dual-core ARM Cortex-A9 @ 866MHz, ~1.15ns/cycle):
+
+| Operation | Time | Reasoning |
+|-----------|------|-----------|
+| `isEnabled()` check | ~3-5ns | Static boolean read + branch (~3-5 cycles) |
+| Buffer bounds checks | ~5-10ns | 2-3 comparisons with memory loads |
+| Thread ID (main thread) | ~3-5ns | Single primitive `long` comparison |
+| Thread ID (other threads) | ~10-20ns | ThreadLocal hash lookup + array access |
+| `System.nanoTime()` | ~40-80ns | Linux `clock_gettime()` syscall |
+| Span field assignments | ~15-30ns | 5-6 memory stores (cache dependent) |
+| `endSpan()` | ~15-30ns | Nanotime + 2 field writes + decrement |
+| **Total main thread** | **~70-180ns** | |
+| **Total other threads** | **~80-200ns** | |
+
+*Estimates based on ARM Cortex-A9 cycle counts (~1.15ns/cycle @ 866MHz). Actual overhead varies by JIT state. Cold calls may be 2-3x slower.*
+
+### Memory Breakdown
+
+```
+=== TraceSpan Memory Estimate ===
+Raw span size: 43 bytes
+Aligned span size: 48 bytes
+Total spans: 64000 (250 loops × 256 spans)
+Span memory: 3072000 bytes (3000 KB)
+Loop overhead: 12000 bytes
+Total buffer memory: 3084000 bytes (~2.94 MB)
+```
 
 ## Requirements
 

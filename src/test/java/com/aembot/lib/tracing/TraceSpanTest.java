@@ -171,6 +171,6 @@ class TraceSpanTest {
 
     // Assertions to document expected sizes
     assertTrue(alignedSize <= 48, "Span size should be <= 48 bytes after optimization");
-    assertTrue(totalMemoryMB < 7, "Total memory should be < 7MB after optimization");
+    assertTrue(totalMemoryMB < 4, "Total memory should be < 4MB with 250-loop buffer");
   }
 }
